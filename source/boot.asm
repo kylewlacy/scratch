@@ -25,7 +25,7 @@ _bpb:
   _bpb.fileSystem         db  "FAT16   "    ; Filesystem type
 
 _data:
-  filename db 'BOOT       '
+  filename db "BOOT       "
   fileCluster  dw 0         ; Stores the cluster of the strap file
 
   fs.dataSector dw 0        ; Stores our data sector
@@ -34,6 +34,8 @@ _data:
   chs.track db 0            ; Stores the track\cylinder for LBAToCHS
   chs.head db 0             ; Stores the head for LBAToCHS
   chs.sector db 0           ; Stores the sector for LBAToCHS
+
+  error db "Boot err", 0x0
 
 _main:
   ; Set up our segment registers and stack
@@ -53,7 +55,6 @@ _main:
 
   .loadRootDir:
     xor cx, cx
-    xor dx, dx
     mov ax, 0x0020                ; Every directory\file entry is 32 bytes (or 0x20)
     mul word[_bpb.rootEntries]    ; Entry size * number of root entries = size of root (in clusters)
     div word[_bpb.bytesPerSector] ; Clusters / sectors per cluster = sectors of root
@@ -66,23 +67,10 @@ _main:
     mov word[fs.dataSector], ax
     add word[fs.dataSector], cx
     
-    ; ; DEBUG
-    ; push ax
-    ; mov ah, 0eh
-    ; mov al, 'T'
-    ; int 10h
-    ; pop ax
-    
     ; Read the FAT to [7C00:0200]
     mov bx, 0x0200
     call ReadSectors
     push ax
-    
-    ; ; DEBUG
-    ; mov ah, 0eh
-    ; mov al, 'D'
-    ; int 10h
-    ; pop ax
     
     mov cx, word[_bpb.rootEntries] ; We want to iterate through each entry
     mov di, 0x0200                 ; The first entry will be here (at [7C00:0200])
@@ -102,17 +90,6 @@ _main:
   
   ; DI + 0x001A now contains the file's first cluster
   .loadFile:
-    ; ; DEBUG
-    ; push ax
-    ; mov ah, 0eh
-    ; mov al, 0x0d
-    ; int 10h
-    ; mov al, 0x0a
-    ; int 10h
-    ; mov al, 'F'
-    ; int 10h
-    ; pop ax
-    
     .load.fat:
       mov dx, word[di+0x001a]
       mov word[fileCluster], dx          ; Save the file's first cluster to file
@@ -127,17 +104,6 @@ _main:
 
       mov bx, 0x0200
       call ReadSectors                   ; Copy the FAT to 0x0200
-      
-      ; ; DEBUG
-      ; push ax
-      ; mov ah, 0eh
-      ; mov al, 'D'
-      ; int 10h
-      ; mov al, 0x0d
-      ; int 10h
-      ; mov al, 0x0a
-      ; int 10h
-      ; pop ax
       
       ; Load the next stage to [0050:0000]
       mov ax, 0x0050
@@ -163,25 +129,9 @@ _main:
       add bx, cx
       mov dx, word[bx]
       
-      ; ; DEBUG
-      ; push ax
-      ; mov ah, 0eh
-      ; mov al, 'L'
-      ; int 10h
-      ; pop ax
-      
       mov word[fileCluster], dx
       cmp dx, 0xfff8
       jb .load.file
-      
-      ; ; DEBUG
-      ; push ax
-      ; mov ah, 0eh
-      ; mov al, 0x0d
-      ; int 10h
-      ; mov al, 0x0a
-      ; int 10h
-      ; pop ax
       
       push word 0x0050
       push word 0x0000
@@ -198,12 +148,19 @@ _main:
     ; mov al, 'E'
     ; int 10h
     ; pop ax
+    ; mov si, error.fileNotFound
+    ; call Print
+    call PrintError
+    cli
+    hlt
     
     ; mov ah, 00h
     ; int 16h
     ; int 19h
 
-Print:
+; PrintError - Prints a simple error message
+PrintError:
+  mov si, error
   pusha
   Print.loop:
     lodsb          ; Load the next character from SI
@@ -221,10 +178,10 @@ Print:
 
 ; Cluster to LBA - Convert from a cluster- to LBA- addressing system
 ; Parameters:
-; AX - Cluster address to convert
+;  AX - Cluster address to convert
 ; Returns:
-; AX - Start of LBA
-; CX - Length of LBA
+;  AX - Start of LBA
+;  CX - Length of LBA
 ClusterToLBA: ; Based on the conversion equation LBA = ((Cluster - 2) * SectorsPerCluster)
   sub ax, 2
   xor cx, cx
@@ -269,13 +226,6 @@ ReadSectors:
   mov di, 0x0005                ; How many times should we retry the read?
   
   ReadSectors.loop:
-    ; ; DEBUG
-    ; push ax
-    ; mov ah, 0eh
-    ; mov al, '-'
-    ; int 10h
-    ; pop ax
-    
     push ax
     push bx
     push cx
@@ -300,13 +250,6 @@ ReadSectors:
     jmp ReadSectors.fail         ; RED ALERT
   
   ReadSectors.success:
-    ; ; DEBUG
-    ; push ax
-    ; mov ah, 0eh
-    ; mov al, '_'
-    ; int 10h
-    ; pop ax
-    
     pop cx
     pop bx
     pop ax
@@ -317,12 +260,7 @@ ReadSectors:
     
     ret
   ReadSectors.fail:
-    ; ; DEBUG
-    ; push ax
-    ; mov ah, 0eh
-    ; mov al, 'R'
-    ; int 10h
-    ; pop ax
+    call PrintError
     
     pop cx
     pop bx
