@@ -148,9 +148,10 @@ _main:
     ; mov al, 'E'
     ; int 10h
     ; pop ax
-    ; mov si, error.fileNotFound
-    ; call Print
-    call PrintError
+
+    mov si, error
+    call Print
+
     cli
     hlt
     
@@ -158,23 +159,7 @@ _main:
     ; int 16h
     ; int 19h
 
-; PrintError - Prints a simple error message
-PrintError:
-  mov si, error
-  pusha
-  Print.loop:
-    lodsb          ; Load the next character from SI
-
-    cmp al, 0      ; If the character is null,
-    je Print.end   ; then we're done
-
-    mov ah, 0eh    ; Use the 'print character' function
-    int 10h        ; Call the 'video services' interrupt
-    jmp Print.loop ; Print the next character as well
-
-  Print.end:
-    popa
-    ret
+%include "lib/base.inc"
 
 ; Cluster to LBA - Convert from a cluster- to LBA- addressing system
 ; Parameters:
@@ -260,7 +245,8 @@ ReadSectors:
     
     ret
   ReadSectors.fail:
-    call PrintError
+    mov si, error
+    call Print
     
     pop cx
     pop bx

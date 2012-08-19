@@ -42,15 +42,4 @@ _main:
   cli
   hlt
 
-Print:
-  pusha
-  print.loop:
-    lodsb
-    cmp al, 0
-    je print.end
-    mov ah, 0eh
-    int 10h
-    jmp print.loop
-  print.end:
-    popa
-    ret
+%include "lib/base.inc"

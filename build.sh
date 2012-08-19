@@ -5,15 +5,17 @@ mkdir -p build/root
 # TODO: This is dumb, just make a blank image
 cp -f resources/blank.img build/boot.img
 
+cd source
 # Compile every assembly file:
 # boot and strap are edge cases
-nasm -f bin source/boot.asm -o build/boot.bin
-nasm -f bin source/strap.asm -o build/root/boot
+nasm -f bin boot.asm -o ../build/boot.bin
+nasm -f bin strap.asm -o ../build/root/boot
 # Every other file gets compiled as filename.asm -> filename.sys
-find source -name *.asm ! -name boot.asm ! -name strap.asm -print0 | while read -d $'\0' file
+find ./ -name '*.asm' ! -name 'boot.asm' ! -name 'strap.asm' -print0 | while read -d $'\0' file
 do
-  nasm $file -o ./build/root/$(basename $file | cut -d'.' -f1).sys
+  nasm $file -o ../build/root/$(basename $file | cut -d'.' -f1).sys
 done
+cd ..
 
 # Mount boot.img, then write our bootsector to it
 # TODO: Make this whole section OS-ambiguous
