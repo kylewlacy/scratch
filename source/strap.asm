@@ -1,4 +1,4 @@
-org 0x00
+org 0
 bits 16
 
 jmp _main
@@ -19,8 +19,13 @@ _main:
   call Print
 
   .loop:
+    mov ah, 01h
+    int 16h
+    jz .loop
+
     mov ah, 00h
     int 16h
+
     cmp al, 0x0d
     mov ah, 0eh
     int 10h
