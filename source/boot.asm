@@ -25,11 +25,11 @@ _bpb:
   _bpb.fileSystem         db  "FAT16   "    ; Filesystem type
 
 _data:
+  fs.driveNumber db 0       ; Stores the actual drive number
+  fs.dataSector dw 0        ; Stores our data sector
+
   filename db "BOOT       "
   fileCluster  dw 0         ; Stores the cluster of the strap file
-
-  fs.dataSector dw 0        ; Stores our data sector
-  fs.driveNumber db 0       ; Stores the actual drive number
 
   chs.track db 0            ; Stores the track\cylinder for LBAToCHS
   chs.head db 0             ; Stores the head for LBAToCHS
@@ -174,17 +174,17 @@ ClusterToLBA: ; Based on the conversion equation LBA = ((Cluster - 2) * SectorsP
 LBAToCHS: 
   ; Based on the equation Sector = (LBA % Sectors per Track) + 1
   xor dx, dx
-  div word[_bpb.sectorsPerTrack]        ; Calculate the modulo (in DL)
+  div word[_bpb.sectorsPerTrack]   ; Calculate the modulo (in DL)
   inc dl
-  mov byte[chs.sector], dl          ; Store it
+  mov byte[chs.sector], dl         ; Store it
 
   ; Based on the equation Head = (LBA / Sectors per Track) % Heads per Cylinder
   xor dx, dx
-  div WORD [_bpb.headsPerCylinder]        ; AX already contains LBA / Sectors per Track
+  div word[_bpb.headsPerCylinder] ; AX already contains LBA / Sectors per Track
   mov byte[chs.head], dl
 
   ; Based on the equation Track = LBA / (Sectors per Track * Number of Heads)
-  mov byte[chs.track], al           ; Very conveniently-placed AX; it already contains the output!
+  mov byte[chs.track], al          ; Very conveniently-placed AX; it already contains the output!
 
   ret
 
@@ -244,8 +244,8 @@ ReadSectors:
     pop bx
     pop ax
 
-    int 18h            ; Call the interrupt indicating a boot failure
+    int 18h                           ; Call the interrupt indicating a boot failure
     ret
 
-times 510-($-$$) db 00 ; We need to fill exactly 512 bytes
+times 510-($-$$) db 0                 ; We need to fill exactly 512 bytes
 dw 0xaa55
