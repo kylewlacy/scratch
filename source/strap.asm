@@ -7,7 +7,7 @@ _data:
   motd db "Hello, World!", 0x0d, 0x0a, 0
   prompt db 0x0d, 0x0a, "> ", 0
   command db 0x0a, 0x07, "   No such command!", 0
-  fail db "Fail", 0
+  error db "Fail", 0
 
   _bootsector:
     times 3 db 0
@@ -50,43 +50,13 @@ _main:
   push cs
   pop ds
 
-  .loadBootsector:
-    mov di, 5
-    pusha
-    mov bx, _bootsector
-    mov ah, 02h
-    mov al, 1
-    mov ch, 0
-    mov cl, 1
-    mov dh, 0
-    mov dl, byte[fs.driveNumber]
-    .loadBootsector.loop:
-      int 13h
-      jnc .loadBootsector.success
-      dec di
-      jnz .loadBootsector.loop
-      jmp .loadBootsector.fail
-    .loadBootsector.success:
-      popa
-      pusha
-      mov di, 512
-      mov ah, 0eh
-      mov bx, _bootsector
-      .prL:
-        mov al, byte[bx]
-        int 10h
-        inc bx
-        dec di
-        jnz .prL
-      popa
-      jmp .start
-    .loadBootsector.fail:
-      mov si, fail
-      call Print
-      cli
-      hlt
+  pusha
+  
+  mov bx, _bootsector
+  call LoadBootsector
 
-  .start:
+  popa
+
   mov si, motd
   call Print
 
@@ -118,3 +88,38 @@ _main:
   hlt
 
 %include "lib/base.inc"
+
+; LoadBootsector - Loads the bootsector into memory
+; Parameters:
+;  ES:BX - Address to read to
+;  byte[fs.driveNumber] - Drive number to use
+; Returns:
+;  [ES:BX] - The bootloader
+LoadBootsector:
+  pusha
+  mov di, 5
+
+  mov bx, _bootsector
+  mov ah, 02h
+  mov al, 1
+  mov ch, 0
+  mov cl, 1
+  mov dh, 0
+  mov dl, byte[fs.driveNumber]
+
+  LoadBootsector.loop:
+    int 13h
+    jnc LoadBootsector.success
+    dec di
+
+    jnz LoadBootsector.loop
+    jmp LoadBootsector.fail
+  LoadBootsector.success:
+    popa
+    ret
+  LoadBootsector.fail:
+    mov si, error
+    call Print
+
+    cli
+    hlt
