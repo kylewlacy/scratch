@@ -52,57 +52,58 @@ _data:
 
 _main:
   ; cli
-  mov byte[fs.driveNumber], dl
+  mov byte[fs.driveNumber], dl ; We moved the drive number to DL before exiting our bootloader
 
-  push cs
+  push cs                      ; Set CS to DS
   pop ds
 
   pusha
-  
+
   mov bx, _bootsector
-  call LoadBootsector
+  call LoadBootsector          ; Load our bootsector to _bootsector in memory
+                               ; TODO: Make this a pointer pointer or something (so we don't store 512 literally empty bytes)
 
   popa
 
-  mov si, motd
+  mov si, motd                 ; Print our MOTD
   call Print
 
   .start:
-    mov bx, command
+    mov bx, command     ; Prepare the command buffer
 
-    mov si, prompt
+    mov si, prompt      ; Print the command prompt
     call Print
-    
+
     .loop:
-      mov ah, 01h
-      int 16h
-      jz .loop
+      mov ah, 01h       ; 01h is the 'check for key in the buffer' method
+      int 16h           ; of the 16h int
+      jz .loop          ; Loop until we have a keypress in the buffer
 
-      mov ah, 00h
-      int 16h
+      mov ah, 00h       ; 01h doesn't /remove/ the key from the buffer, though
+      int 16h           ; 00h/16h reads the key into AL /and/ removes it from the buffer!
 
-      cmp al, 0x0d
-      je .command
+      cmp al, 0x0d      ; Was the enter key pressed?
+      je .command       ; Then interpret the user's command
 
-      mov ah, 0eh
+      mov ah, 0eh       ; Otherwise, just print the key character
       int 10h
 
-      mov byte[bx], al
-      inc bx
+      mov byte[bx], al  ; Also, copy the key into the command buffer (BX)
+      inc bx            ; The next key will be loaded into the next byte of the command buffer
 
       jmp .loop
 
     .command:
-      mov si, prefix
+      mov si, prefix    ; First, print our newline and pseudo-tab
       call Print
-      mov si, nocommand
+      mov si, nocommand ; We don't have /any/ commands, so print an error,
       call Print
-      mov si, command
+      mov si, command   ; Followed by the command the user entered
       call Print
 
       .printCommands:
-        mov ah, 0eh
-        mov al, 0x0d
+        mov ah, 0eh                      ; Add 2 newlines
+        mov al, 0x0d                     ; TODO: Add a newline variable\subroutine
         int 10h
         mov al, 0x0a
         int 10h
@@ -111,47 +112,52 @@ _main:
         mov al, 0x0a
         int 10h
 
-        mov bx, binaries
+        mov bx, binaries                 ; Prepare the list of our binaries for printing
         mov di, 11
         jmp .printCommands.printLoop
 
         .printCommands.loop:
-          mov al, 0x0d
+          mov al, 0x0d                   ; Print a newline between each binary name
           int 10h
           mov al, 0x0a
           int 10h
 
-          mov di, 11
-          add bx, 2
+          mov di, 11                     ; Each array is composed of an 11-character filename
+          add bx, 2                      ; followed by a pointer to the file's cluster (we don't print the latter)
 
-          cmp byte[bx], 0
-          je .printCommands.done
+          cmp byte[bx], 0                ; We still have a null character to indicate the end of our array
+          je .printCommands.done         ; If we reach it, we're done
 
           .printCommands.printLoop:
-            mov al, byte[bx]
+            mov al, byte[bx]             ; Print the character byte[BX] (which contains the next character to print)
             int 10h
 
-            inc bx
-            dec di
+            inc bx                       ; Go to the next character,
+            dec di                       ; and indicate that we've printed one more out of the 11 we need to
 
-            cmp di, 0
-            je .printCommands.loop
+            cmp di, 0                    ; If we've finished printing all 11,
+            je .printCommands.loop       ; Then we're done (with this binary
 
-            jmp .printCommands.printLoop
+            jmp .printCommands.printLoop ; Otherwise, keep going!
 
-          .printCommands.donePrinting:
-            
         .printCommands.done:
 
+      ; We need to clear out the command buffer; otherwise, if the current command is shorter
+      ; than the last, the end of the last will still be shown:
+      ;   > copy
+      ;      (copy is in the buffer)
+      ;   > cp
+      ;      (cpcy is in the buffer)
       .eraseCommand:
-        mov bx, command
+        mov bx, command          ; Get BX ready to erase
 
         .eraseCommand.loop:
-          cmp byte[bx], 0xff
-          je .start
+          cmp byte[bx], 0xff     ; We use 0xFF as a 'null-character', we are replacing everything with 0's!
+                                 ; TODO: This could be made more efficient by using the null character anyway: it would only remove the nonzero region
+          je .start              ; We're done if we've reached it
 
-          mov byte[bx], 0x00
-          inc bx
+          mov byte[bx], 0x00     ; Clear out byte[BX]
+          inc bx                 ; Go to the next character in the buffer
           jmp .eraseCommand.loop
 
   
@@ -168,27 +174,28 @@ _main:
 ;  [ES:BX] - The bootloader
 LoadBootsector:
   pusha
-  mov di, 5
+  mov di, 5                    ; We'll use the usual 5 attempts to read from the disk
 
-  mov bx, _bootsector
-  mov ah, 02h
-  mov al, 1
-  mov ch, 0
-  mov cl, 1
-  mov dh, 0
-  mov dl, byte[fs.driveNumber]
+  mov bx, _bootsector          ; This is where we'll read the bootsector to
+  mov ah, 02h                  ; 02h/13h reads from the disk
+  mov al, 1                    ; We only want to read the bootsector (which is 1 sector)
+  mov ch, 0                    ; The bootsector is the first track,
+  mov cl, 1                    ; and the first sector,
+  mov dh, 0                    ; AND the first head!
+  mov dl, byte[fs.driveNumber] ; Read from the current disk, obviously
 
   LoadBootsector.loop:
-    int 13h
-    jnc LoadBootsector.success
-    dec di
+    int 13h                    ; Read from the disk now, using our parameters from above
+    jnc LoadBootsector.success ; We're done if we read the data in successfully
+    dec di                     ; Otherwise, we need to try again
 
-    jnz LoadBootsector.loop
-    jmp LoadBootsector.fail
+    jnz LoadBootsector.loop    ; Unless we've already tried again!
+    jmp LoadBootsector.fail    ; RED ALERT
   LoadBootsector.success:
     popa
     ret
   LoadBootsector.fail:
+    ; TODO: Leave the part up to the caller (set a flag or something)
     mov si, error
     call Print
 

@@ -242,6 +242,7 @@ ReadSectors:
 
     ret
   ReadSectors.fail:
+    ; TODO: Leave the part up to the caller (set a flag or something)
     mov si, error
     call Print
 
