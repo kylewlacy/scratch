@@ -6,11 +6,13 @@ jmp _main
 _data:
   motd db "Hello, World!", 0x0d, 0x0a, 0
   prompt db 0x0d, 0x0a, "> ", 0
-  command db 0x0a, 0x07, "   No such command!", 0
+  prefix db 0x0d, 0x0a, "   ", 0
+  nocommand db "No such command: ", 0
   error db "Fail", 0
 
   _bootsector:
     times 3 db 0
+
   ; This is where we will copy the BPB to in memory
   _bpb:
     _bpb.oem                db  "        "    ; OEM name or version
@@ -33,14 +35,17 @@ _data:
     _bpb.diskLabel          db  "           " ; Volume label
     _bpb.fileSystem         db  "        "    ; Filesystem type
 
-  times 512-62 db 0
+    times (512-62) db 0
 
-  fs.driveNumber db 0 ; Stores the drive number
-  fs.dataSector dw 0  ; Stores our data sector
+  command times 255 db 0 ; The command buffer
+  db 0xff                ; Indicate the absolute end of our command buffer
 
-  chs.track db 0      ; Stores the track\cylinder for LBAToCHS
-  chs.head db 0       ; Stores the head for LBAToCHS
-  chs.sector db 0     ; Stores the sector for LBAToCHS
+  fs.driveNumber db 0    ; Stores the drive number
+  fs.dataSector dw 0     ; Stores our data sector
+
+  chs.track db 0         ; Stores the track\cylinder for LBAToCHS
+  chs.head db 0          ; Stores the head for LBAToCHS
+  chs.sector db 0        ; Stores the sector for LBAToCHS
  
 
 _main:
@@ -60,29 +65,50 @@ _main:
   mov si, motd
   call Print
 
-  mov si, prompt
-  call Print
+  .start:
+    mov bx, command
 
-  .loop:
-    mov ah, 01h
-    int 16h
-    jz .loop
-
-    mov ah, 00h
-    int 16h
-
-    cmp al, 0x0d
-    mov ah, 0eh
-    int 10h
-    je .command
-    jmp .loop
-
-  .command:
-    mov si, command
-    call Print
     mov si, prompt
     call Print
-    jmp .loop
+    
+    .loop:
+      mov ah, 01h
+      int 16h
+      jz .loop
+
+      mov ah, 00h
+      int 16h
+
+      cmp al, 0x0d
+      je .command
+
+      mov ah, 0eh
+      int 10h
+
+      mov byte[bx], al
+      inc bx
+
+      jmp .loop
+
+    .command:
+      mov si, prefix
+      call Print
+      mov si, nocommand
+      call Print
+      mov si, command
+      call Print
+
+      .eraseCommand:
+        mov bx, command
+
+        .eraseCommand.loop:
+          cmp byte[bx], 0xff
+          je .start
+
+          mov byte[bx], 0x00
+          inc bx
+          jmp .eraseCommand.loop
+
   
   cli
   hlt
