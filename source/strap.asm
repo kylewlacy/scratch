@@ -37,6 +37,8 @@ _data:
 
     times (512-62) db 0
 
+  binaries:              ; This is where we will keep a list of binaries (debug data for now)
+    db "CP         zzMV         zzLS         zz", 0
   command times 255 db 0 ; The command buffer
   db 0xff                ; Indicate the absolute end of our command buffer
 
@@ -97,6 +99,49 @@ _main:
       call Print
       mov si, command
       call Print
+
+      .printCommands:
+        mov ah, 0eh
+        mov al, 0x0d
+        int 10h
+        mov al, 0x0a
+        int 10h
+        mov al, 0x0d
+        int 10h
+        mov al, 0x0a
+        int 10h
+
+        mov bx, binaries
+        mov di, 11
+        jmp .printCommands.printLoop
+
+        .printCommands.loop:
+          mov al, 0x0d
+          int 10h
+          mov al, 0x0a
+          int 10h
+
+          mov di, 11
+          add bx, 2
+
+          cmp byte[bx], 0
+          je .printCommands.done
+
+          .printCommands.printLoop:
+            mov al, byte[bx]
+            int 10h
+
+            inc bx
+            dec di
+
+            cmp di, 0
+            je .printCommands.loop
+
+            jmp .printCommands.printLoop
+
+          .printCommands.donePrinting:
+            
+        .printCommands.done:
 
       .eraseCommand:
         mov bx, command
